@@ -1,0 +1,4 @@
+tkinter
+bleak
+speechrecognition
+pyttsx3
