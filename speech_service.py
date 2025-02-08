@@ -1,35 +1,66 @@
 import speech_recognition as sr
-import time
 import threading
 
 class SpeechService:
-    def __init__(self, wake_word_callback):
+    def __init__(self, on_wake_word_detected, bluetooth_service):
         self.speech_recognizer = sr.Recognizer()
-        self.wake_word_callback = wake_word_callback
-        self.wake_word = "hello"
+        self.speech_recognizer.energy_threshold = 300  # Adjust for better detection
+        self.speech_recognizer.dynamic_energy_threshold = True  # Auto-adjusts based on noise
+        self.on_wake_word_detected = on_wake_word_detected
+        self.bluetooth_service = bluetooth_service  # Handles Bluetooth connections
+        self.is_listening_for_command = False  # Prevents duplicate wake word activations
 
-        # ✅ Start Wake Word Detection in a Separate Thread
+        # Start listening for wake word in the background
         threading.Thread(target=self.listen_for_wake_word, daemon=True).start()
 
     def listen_for_wake_word(self):
+        """Continuously listens for 'Hello' to activate commands."""
         while True:
             try:
                 with sr.Microphone() as source:
-                    print("Listening for wake word...")
+                    print("Listening for wake word (Hello)...")
+                    self.speech_recognizer.adjust_for_ambient_noise(source, duration=1)
                     audio = self.speech_recognizer.listen(source)
-                    text = self.speech_recognizer.recognize_google(audio).lower()
+
+                    # Convert speech to text
+                    text = self.speech_recognizer.recognize_google(audio).lower().strip()
                     print(f"Heard: {text}")
 
-                    if self.wake_word in text:
-                        print("Wake word detected! Responding...")
-                        self.wake_word_callback()
+                    # Activate only if wake word detected
+                    if "hello" in text and not self.is_listening_for_command:
+                        self.is_listening_for_command = True  # Prevents multiple activations
+                        print("Wake word detected!")
+                        self.on_wake_word_detected()
+                        self.listen_for_command()  # Now listen for the actual command
 
-                        # ✅ Give time to speak, then restart wake word detection
-                        time.sleep(3)  # Prevents immediate retriggering
             except sr.UnknownValueError:
-                pass
+                continue  # Ignore and keep listening
             except sr.RequestError:
                 print("Speech recognition service error.")
-                break
+                break  # Stop if there's an API issue
 
-            time.sleep(1)  # ✅ Restart wake word detection after a short pause
+    def listen_for_command(self):
+        """Listens for a user command after activation."""
+        try:
+            with sr.Microphone() as source:
+                print("Listening for command...")
+                self.speech_recognizer.adjust_for_ambient_noise(source, duration=1)
+                audio = self.speech_recognizer.listen(source)
+
+                command = self.speech_recognizer.recognize_google(audio).lower().strip()
+                print(f"Command recognized: {command}")
+
+                if "connect to" in command:
+                    device_name = command.replace("connect to", "").strip()
+                    if self.bluetooth_service.connect_to_device(device_name):
+                        print(f"Connected to {device_name}")
+                    else:
+                        print(f"Could not connect to {device_name}")
+
+        except sr.UnknownValueError:
+            print("Could not understand. Try again.")
+        except sr.RequestError:
+            print("Speech recognition service error.")
+
+        # ✅ After processing the command, return to listening for "Hello"
+        self.is_listening_for_command = False  # Allows wake-word detection again
