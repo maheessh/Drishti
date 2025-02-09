@@ -55,14 +55,12 @@ class FaceDetector:
                         if face_distance:
                             detected_distance = self.get_smoothed_distance(face_distance)
 
-                        # ✅ Draw face detection on frame
                         cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[0] + bbox[2], bbox[1] + bbox[3]), (255, 0, 0), 2)
                         cv2.putText(frame, f"Distance: {face_distance:.2f} cm", (bbox[0], bbox[1] - 10),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
                         bbox_history.append(bbox)
 
-                # ✅ Update UI with detected distance
                 if detected_distance is not None and self.update_ui_callback:
                     self.update_ui_callback(detected_distance)
 

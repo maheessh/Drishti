@@ -13,13 +13,10 @@ class ObjectDetector:
         self.tts_engine = pyttsx3.init()
         self.tts_engine.setProperty('rate', 150)
 
-        # ✅ Load YOLOv5 model properly
         self.model = torch.hub.load('ultralytics/yolov5', 'yolov5s', force_reload=True)
 
-        # ✅ OCR Reader for text recognition
         self.reader = easyocr.Reader(['en'])
 
-        # ✅ SQLite Database Setup
         self.conn = sqlite3.connect("detections.db", check_same_thread=False)
         self.cursor = self.conn.cursor()
         self.cursor.execute("""
@@ -31,7 +28,7 @@ class ObjectDetector:
         """)
         self.conn.commit()
 
-        self.update_ui_callback = update_ui_callback  # ✅ UI Callback Function
+        self.update_ui_callback = update_ui_callback  
 
     def speak(self, text):
         """Convert text to speech asynchronously."""
@@ -57,14 +54,11 @@ class ObjectDetector:
                     print("[ERROR] Couldn't read frame from webcam!")
                     break
 
-                # ✅ Detect objects with YOLOv5
                 results = self.model(frame)
                 labels = results.pandas().xyxy[0]['name'].tolist()
 
-                # ✅ Detect text with EasyOCR
                 text_results = self.reader.readtext(frame, detail=0)
 
-                # ✅ Draw bounding boxes for detected objects
                 for index, row in results.pandas().xyxy[0].iterrows():
                     x1, y1, x2, y2 = int(row['xmin']), int(row['ymin']), int(row['xmax']), int(row['ymax'])
                     label = row['name']
@@ -73,7 +67,6 @@ class ObjectDetector:
                     cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                     cv2.putText(frame, f"{label} ({confidence:.2f})", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
-                # ✅ Draw bounding boxes for detected text
                 for result in text_results:
                     if len(result) == 2:  # Fix unpacking error
                         (bbox, text) = result
@@ -89,18 +82,15 @@ class ObjectDetector:
 
                 detected_items = labels + [text for (_, text, *_) in text_results]
 
-                # ✅ Speak detected items and save to history
                 if detected_items:
                     detected_str = ", ".join(detected_items)
                     print(f"Detected: {detected_str}")
                     self.speak(detected_str)
                     self.save_detection(detected_str)
 
-                    # ✅ Update UI if callback is set
                     if self.update_ui_callback:
                         self.update_ui_callback(detected_str)
 
-                # ✅ Show webcam feed with detections
                 cv2.imshow("Object Detection", frame)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break

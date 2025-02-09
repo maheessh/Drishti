@@ -4,6 +4,7 @@ import threading
 from bluetooth_service import BluetoothService
 from speech_service import SpeechService
 from tts_service import TextToSpeechService
+from hardware_data import HardwareMonitor  # Import hardware monitoring class
 
 class BluetoothApp:
     def __init__(self, root):
@@ -17,28 +18,45 @@ class BluetoothApp:
         self.tts_service = TextToSpeechService()
         self.speech_service = SpeechService(self.on_wake_word_detected, self.bluetooth_service)
 
-        # ✅ Custom Styling
-        self.style = ttk.Style()
-        self.style.configure("TButton", font=("Arial", 12, "bold"), padding=10, background="#007BFF", foreground="white")
-        self.style.map("TButton", background=[("active", "#0056b3")])  
+        # ✅ Create Tabs
+        self.notebook = ttk.Notebook(root)
+        self.home_tab = ttk.Frame(self.notebook)
+        self.health_tab = ttk.Frame(self.notebook)
 
+        self.notebook.add(self.home_tab, text="Home")
+        self.notebook.add(self.health_tab, text="Health")
+        self.notebook.pack(expand=True, fill="both")
+
+        # ✅ Setup Home Tab
+        self.setup_home_tab()
+
+        # ✅ Setup Health Tab
+        self.hardware_monitor = HardwareMonitor(self.health_tab)
+
+        # ✅ Devices & Connection Storage
+        self.devices = []
+        self.connected_device = None
+        self.object_detection_callback = None  
+
+    def setup_home_tab(self):
+        """Setup UI elements for Home tab."""
         # ✅ Title Label
-        self.label = tk.Label(
-            root,
+        label = tk.Label(
+            self.home_tab,
             text="Dristhi - Assistive Wearable",
             font=("Arial", 20, "bold"),
             fg="white",
             bg="#1E1E1E"
         )
-        self.label.pack(pady=15)
+        label.pack(pady=15)
 
         # ✅ Bluetooth Control Frame
-        self.control_frame = tk.Frame(root, bg="#1E1E1E")
-        self.control_frame.pack(pady=10, padx=20, fill=tk.X)
+        control_frame = tk.Frame(self.home_tab, bg="#1E1E1E")
+        control_frame.pack(pady=10, padx=20, fill=tk.X)
 
         # ✅ Scan Bluetooth Button
-        self.scan_button = tk.Button(
-            self.control_frame,
+        scan_button = tk.Button(
+            control_frame,
             text="Scan Bluetooth Devices",
             command=self.scan_bluetooth,
             font=("Arial", 12, "bold"),
@@ -47,14 +65,14 @@ class BluetoothApp:
             relief="raised",
             bd=3
         )
-        self.scan_button.pack(pady=10, fill=tk.X)
+        scan_button.pack(pady=10, fill=tk.X)
 
         # ✅ Device List with Scrollbar
-        self.list_frame = tk.Frame(root, bg="#1E1E1E")
-        self.list_frame.pack(pady=10, padx=20, fill=tk.BOTH, expand=True)
+        list_frame = tk.Frame(self.home_tab, bg="#1E1E1E")
+        list_frame.pack(pady=10, padx=20, fill=tk.BOTH, expand=True)
 
         self.device_listbox = tk.Listbox(
-            self.list_frame,
+            list_frame,
             width=50,
             height=10,
             font=("Arial", 12),
@@ -68,13 +86,13 @@ class BluetoothApp:
         )
         self.device_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        self.scrollbar = ttk.Scrollbar(self.list_frame, orient=tk.VERTICAL, command=self.device_listbox.yview)
-        self.device_listbox.configure(yscrollcommand=self.scrollbar.set)
-        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.device_listbox.yview)
+        self.device_listbox.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         # ✅ Connect Button
-        self.connect_button = tk.Button(
-            self.control_frame,
+        connect_button = tk.Button(
+            control_frame,
             text="Connect to Device",
             command=self.connect_bluetooth,
             font=("Arial", 12, "bold"),
@@ -83,11 +101,11 @@ class BluetoothApp:
             relief="raised",
             bd=3
         )
-        self.connect_button.pack(pady=10, fill=tk.X)
+        connect_button.pack(pady=10, fill=tk.X)
 
         # ✅ Object Detection Button
-        self.camera_button = tk.Button(
-            self.control_frame,
+        camera_button = tk.Button(
+            control_frame,
             text="Start Object Detection",
             command=self.start_object_detection,
             font=("Arial", 12, "bold"),
@@ -96,11 +114,11 @@ class BluetoothApp:
             relief="raised",
             bd=3
         )
-        self.camera_button.pack(pady=10, fill=tk.X)
+        camera_button.pack(pady=10, fill=tk.X)
 
         # ✅ Status Label
         self.status_label = tk.Label(
-            root,
+            self.home_tab,
             text="Status: Waiting for connection...",
             font=("Arial", 12, "italic"),
             fg="#BDC3C7",
@@ -110,7 +128,7 @@ class BluetoothApp:
 
         # ✅ Person Distance Label
         self.face_label = tk.Label(
-            root,
+            self.home_tab,
             text="Person Distance: Not detected",
             font=("Arial", 14),
             fg="#FFC107",
@@ -120,7 +138,7 @@ class BluetoothApp:
 
         # ✅ Listening Label
         self.speech_label = tk.Label(
-            root,
+            self.home_tab,
             text="Listening for wake word...",
             font=("Arial", 12, "italic"),
             fg="#00A8E8",
@@ -128,10 +146,9 @@ class BluetoothApp:
         )
         self.speech_label.pack(pady=10)
 
-        # ✅ Devices & Connection Storage
-        self.devices = []
-        self.connected_device = None
-        self.object_detection_callback = None  
+    def setup_health_tab(self):
+        """Setup UI elements for Health tab (Hardware Data)."""
+        self.hardware_monitor = HardwareMonitor(self.health_tab)
 
     def scan_bluetooth(self):
         """Scans for Bluetooth devices and updates the listbox in the UI."""
@@ -177,7 +194,7 @@ class BluetoothApp:
 
     def update_detection_results(self, detected_text):
         """Update the UI with detected objects/text"""
-        self.detection_label.config(text=f"Detected: {detected_text}")
+        self.speech_label.config(text=f"Detected: {detected_text}")
 
 if __name__ == "__main__":
     root = tk.Tk()
