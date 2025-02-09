@@ -1,9 +1,8 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk
 import threading
 import cv2
 from PIL import Image, ImageTk
-from speech_service import SpeechService
 from tts_service import TextToSpeechService
 from hardware_data import HardwareMonitor
 
@@ -16,7 +15,6 @@ class DristhiApp:
         self.root.configure(bg="#1E1E1E")
 
         self.tts_service = TextToSpeechService()
-        self.speech_service = SpeechService(self.on_wake_word_detected)  # Removed Bluetooth dependency
 
         self.notebook = ttk.Notebook(root)
         self.home_tab = ttk.Frame(self.notebook)
@@ -35,13 +33,6 @@ class DristhiApp:
         # OpenCV Camera Feed
         self.cap = cv2.VideoCapture(0)
         self.update_camera_feed()
-
-    def on_wake_word_detected(self):
-        """Handle wake word detection and update UI."""
-        self.speech_label.config(text="Wake word detected! Responding...")
-        self.tts_service.speak("Hi, how can I help you?")
-        
-        threading.Thread(target=self.speech_service.listen_for_wake_word, daemon=True).start()
 
     def setup_home_tab(self):
         """Setup UI elements for the Home tab."""
@@ -130,9 +121,3 @@ class DristhiApp:
     def start_object_detection(self):
         if self.object_detection_callback:
             self.object_detection_callback()
-
-
-if __name__ == "__main__":
-    root = tk.Tk()
-    app = DristhiApp(root)
-    root.mainloop()

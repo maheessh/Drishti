@@ -1,12 +1,12 @@
 import tkinter as tk
 import threading
 from ui import DristhiApp
-from object_detection import ObjectDetector
+from object_distance_detector import ObjectDistanceDetector
 
 def run_detection(app):
-    """Start object detection using shared camera feed."""
-    detector = ObjectDetector(update_ui_callback=app.update_camera_display, shared_cap=app.cap)
-    detector.detect_objects()
+    """Start object & distance detection using shared camera feed."""
+    detector = ObjectDistanceDetector(update_ui_callback=app.update_camera_display, shared_cap=app.cap)
+    detector.detect_objects_and_distance()
 
 if __name__ == "__main__":
     root = tk.Tk()
