@@ -1,101 +1,71 @@
 import cv2
-import pytesseract
-import easyocr
 import torch
-import sqlite3
+import easyocr
 import pyttsx3
 import threading
-from datetime import datetime
+import time
 
 class ObjectDetector:
-    def __init__(self, update_ui_callback=None):
-        """Initialize object detection, database, and text-to-speech."""
+    def __init__(self, update_ui_callback=None, shared_cap=None):
+        """Initialize object detection and text-to-speech."""
         self.tts_engine = pyttsx3.init()
-        self.tts_engine.setProperty('rate', 150)
+        self.tts_engine.setProperty('rate', 150)  # Adjust speech speed
 
-        self.model = torch.hub.load('ultralytics/yolov5', 'yolov5s', force_reload=True)
+        self.model = torch.hub.load('ultralytics/yolov5', 'yolov5s', force_reload=True)  # YOLOv5 model
+        self.reader = easyocr.Reader(['en'])  # OCR reader for text detection
 
-        self.reader = easyocr.Reader(['en'])
+        self.update_ui_callback = update_ui_callback  # Callback to update UI
 
-        self.conn = sqlite3.connect("detections.db", check_same_thread=False)
-        self.cursor = self.conn.cursor()
-        self.cursor.execute("""
-            CREATE TABLE IF NOT EXISTS history (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                detected_item TEXT,
-                timestamp TEXT
-            )
-        """)
-        self.conn.commit()
-
-        self.update_ui_callback = update_ui_callback  
+        # ✅ Use shared camera from UI if available, otherwise open a new one
+        self.cap = shared_cap if shared_cap else cv2.VideoCapture(0)
+        self.running = True  # Flag to control detection loop
 
     def speak(self, text):
         """Convert text to speech asynchronously."""
         threading.Thread(target=lambda: self._speak(text), daemon=True).start()
 
     def _speak(self, text):
+        """Speak text."""
         self.tts_engine.say(text)
         self.tts_engine.runAndWait()
 
-    def save_detection(self, item):
-        """Save detected object in the database."""
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        self.cursor.execute("INSERT INTO history (detected_item, timestamp) VALUES (?, ?)", (item, timestamp))
-        self.conn.commit()
-
     def detect_objects(self):
-        """Detect objects and read text using OCR continuously in a thread."""
+        """Detect objects continuously and speak detected items every 8 seconds."""
         def run_detection():
-            cap = cv2.VideoCapture(0)
-            while True:
-                ret, frame = cap.read()
+            while self.running:
+                ret, frame = self.cap.read()
                 if not ret:
                     print("[ERROR] Couldn't read frame from webcam!")
                     break
 
+                # Run YOLO object detection
                 results = self.model(frame)
-                labels = results.pandas().xyxy[0]['name'].tolist()
+                labels = results.pandas().xyxy[0]['name'].tolist()  # Extract object names
 
-                text_results = self.reader.readtext(frame, detail=0)
-
-                for index, row in results.pandas().xyxy[0].iterrows():
-                    x1, y1, x2, y2 = int(row['xmin']), int(row['ymin']), int(row['xmax']), int(row['ymax'])
-                    label = row['name']
-                    confidence = row['confidence']
-
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                    cv2.putText(frame, f"{label} ({confidence:.2f})", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-
-                for result in text_results:
-                    if len(result) == 2:  # Fix unpacking error
-                        (bbox, text) = result
-                    elif len(result) == 3:  # Some versions return confidence value
-                        (bbox, text, prob) = result
-
-                    (top_left, top_right, bottom_right, bottom_left) = bbox
-                    top_left = tuple(map(int, top_left))
-                    bottom_right = tuple(map(int, bottom_right))
-
-                    cv2.rectangle(frame, top_left, bottom_right, (255, 0, 0), 2)
-                    cv2.putText(frame, text, (top_left[0], top_left[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
-
-                detected_items = labels + [text for (_, text, *_) in text_results]
-
+                # Speak detected items every 8 seconds
+                detected_items = labels
                 if detected_items:
                     detected_str = ", ".join(detected_items)
                     print(f"Detected: {detected_str}")
-                    self.speak(detected_str)
-                    self.save_detection(detected_str)
+                    self.speak(detected_str)  # Speak detected objects
 
+                    # ✅ Update UI with detected objects (No distance info for now)
                     if self.update_ui_callback:
-                        self.update_ui_callback(detected_str)
+                        self.update_ui_callback(detected_str, None)
 
-                cv2.imshow("Object Detection", frame)
+                cv2.imshow("Object Detection", frame)  # Show camera feed
+
+                # ✅ Wait for 8 seconds before detecting again
+                time.sleep(8)
+
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
 
-            cap.release()
+            self.cap.release()
             cv2.destroyAllWindows()
 
         threading.Thread(target=run_detection, daemon=True).start()
+
+    def stop(self):
+        """Stop object detection."""
+        self.running = False
